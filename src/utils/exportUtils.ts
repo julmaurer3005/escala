@@ -2,9 +2,8 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import * as XLSX from 'xlsx';
 import type { Militar, MonthConfig } from '../types';
-import { MONTH_NAMES, DAYS_OF_WEEK_SHORT, getShiftHours } from '../data/constants';
+import { MONTH_NAMES, DAYS_OF_WEEK_SHORT, getShiftHours, parseShiftCell } from '../data/constants';
 import { computeScheduleStats } from './schedulerEngine';
-import { getRoleAbbr } from '../components/RosterGrid';
 
 export function exportScheduleToPDF(
   personnel: Militar[],
@@ -47,13 +46,16 @@ export function exportScheduleToPDF(
   }, {} as Record<string, typeof stats[0]>);
 
   const bodyData = personnel.map(p => {
-    const roleAbbr = getRoleAbbr(p);
-    const nameWithRole = roleAbbr ? `${p.warName}\n(${roleAbbr})` : p.warName;
-    const row: string[] = [p.rank, p.matricula || '-', nameWithRole];
+    const row: string[] = [p.rank, p.matricula || '-', p.warName];
     
     for (let d = 1; d <= numDays; d++) {
       const code = schedule[d]?.[p.id] || '';
-      row.push(code);
+      if (code) {
+        const parsed = parseShiftCell(code, p);
+        row.push(parsed.role ? `${parsed.shiftCode}\n${parsed.role}` : parsed.shiftCode);
+      } else {
+        row.push('');
+      }
     }
 
     const s = statsMap[p.id];
@@ -171,7 +173,12 @@ export function exportScheduleToExcel(
 
     for (let d = 1; d <= numDays; d++) {
       const code = schedule[d]?.[p.id] || '';
-      row[`Dia ${d}`] = code;
+      if (code) {
+        const parsed = parseShiftCell(code, p);
+        row[`Dia ${d}`] = parsed.role ? `${parsed.shiftCode} (${parsed.role})` : parsed.shiftCode;
+      } else {
+        row[`Dia ${d}`] = '';
+      }
     }
 
     const s = statsMap[p.id];

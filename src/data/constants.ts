@@ -40,9 +40,75 @@ export const SHIFT_MAP: Record<string, ShiftDefinition> = SHIFTS.reduce((acc, sh
   return acc;
 }, {} as Record<string, ShiftDefinition>);
 
+export const parseShiftCell = (rawCell: string | undefined, militar?: Militar): { shiftCode: string; role: string; fullCode: string } => {
+  if (!rawCell) return { shiftCode: '', role: '', fullCode: '' };
+  const raw = rawCell.trim();
+  if (!raw || raw === '-') return { shiftCode: '', role: '', fullCode: '' };
+
+  let shiftCode = raw;
+  let customRole = '';
+
+  if (raw.includes(':')) {
+    const parts = raw.split(':');
+    shiftCode = parts[0].trim();
+    customRole = parts.slice(1).join(':').trim();
+  } else if (raw.includes('|')) {
+    const parts = raw.split('|');
+    shiftCode = parts[0].trim();
+    customRole = parts.slice(1).join('|').trim();
+  } else if (raw.includes('\n')) {
+    const parts = raw.split('\n');
+    shiftCode = parts[0].trim();
+    customRole = parts.slice(1).join(' ').trim();
+  }
+
+  // If no custom role was specified on this cell, deduce from militar default
+  let role = customRole;
+  if (!role && militar) {
+    const upperShift = shiftCode.toUpperCase();
+    if (upperShift === 'J' || ['1', '2', '3', '4', '41', '23', '34', '123', '234', '341'].includes(upperShift)) {
+      if (militar.isCommander || militar.rank.includes('Tenente')) {
+        role = 'CMTE';
+      } else {
+        const mRole = (militar.role || '').toLowerCase();
+        if (mRole.includes('chefe') || militar.rank.includes('SARGENTO')) role = 'CHEFE';
+        else if (mRole.includes('motorista') || mRole.includes('cov') || mRole.includes('condutor')) role = 'COV';
+        else if (mRole.includes('prevenção') || mRole.includes('prevencao')) role = 'PREVENÇÃO';
+        else if (mRole.includes('sarg')) role = 'SARG';
+        else if (mRole.includes('socorrista')) role = 'SOCORRISTA';
+        else role = 'SOCORRISTA';
+      }
+    } else if (upperShift.startsWith('EXP')) {
+      role = 'EXP';
+    } else if (upperShift.startsWith('OS')) {
+      role = 'OS';
+    }
+  }
+
+  return {
+    shiftCode,
+    role: role.toUpperCase(),
+    fullCode: customRole ? `${shiftCode}:${customRole}` : shiftCode
+  };
+};
+
+export const getDailyRoleBadgeStyle = (role: string): string => {
+  const upper = (role || '').toUpperCase();
+  if (upper === 'CHEFE') return 'bg-amber-500/20 text-amber-300 border-amber-500/40';
+  if (upper === 'COV' || upper === 'MOTORISTA') return 'bg-cyan-500/20 text-cyan-300 border-cyan-500/40';
+  if (upper === 'SOCORRISTA' || upper === 'SOC') return 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40';
+  if (upper === 'PREVENÇÃO' || upper === 'PREV') return 'bg-purple-500/20 text-purple-300 border-purple-500/40';
+  if (upper === 'SARG' || upper === 'SARGENTEANTE') return 'bg-indigo-500/20 text-indigo-300 border-indigo-500/40';
+  if (upper === 'CMTE' || upper === 'COMANDANTE') return 'bg-yellow-500/25 text-yellow-300 border-yellow-500/50';
+  if (upper === 'EXP') return 'bg-blue-500/20 text-blue-300 border-blue-500/30';
+  if (upper === 'OS') return 'bg-sky-500/20 text-sky-300 border-sky-500/30';
+  return 'bg-slate-800/80 text-slate-400 border-slate-700/60';
+};
+
 export const getShiftHours = (code: string | undefined): number => {
   if (!code) return 0;
-  const upper = code.trim().toUpperCase();
+  const raw = code.trim().toUpperCase();
+  const upper = raw.includes(':') ? raw.split(':')[0] : raw.includes('|') ? raw.split('|')[0] : raw;
   if (SHIFT_MAP[upper]) return SHIFT_MAP[upper].hours;
 
   const match = upper.match(/^(EXP|OS|IN|FC|CM)(\d+)$/);
