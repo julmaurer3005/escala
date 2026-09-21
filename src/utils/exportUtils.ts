@@ -4,6 +4,7 @@ import * as XLSX from 'xlsx';
 import type { Militar, MonthConfig } from '../types';
 import { MONTH_NAMES, DAYS_OF_WEEK_SHORT, getShiftHours } from '../data/constants';
 import { computeScheduleStats } from './schedulerEngine';
+import { getRoleAbbr } from '../components/RosterGrid';
 
 export function exportScheduleToPDF(
   personnel: Militar[],
@@ -21,14 +22,14 @@ export function exportScheduleToPDF(
 
   doc.setFontSize(10);
   doc.setFont('helvetica', 'bold');
-  doc.text('ESTADO DO RIO GRANDE DO SUL', 148.5, 10, { align: 'center' });
-  doc.text('SECRETARIA DA SEGURANÇA PÚBLICA', 148.5, 14, { align: 'center' });
-  doc.text('CORPO DE BOMBEIROS MILITAR DO RIO GRANDE DO SUL - CBMRS', 148.5, 18, { align: 'center' });
-  doc.setFontSize(11);
-  doc.text(`ESCALA MENSAL DE SERVIÇO - 1º PELOTÃO DE BOMBEIRO MILITAR (IJUÍ/RS) - ${monthName} DE ${year}`, 148.5, 23, { align: 'center' });
+  doc.text('ESTADO DO RIO GRANDE DO SUL', 148.5, 9, { align: 'center' });
+  doc.text('SECRETARIA DA SEGURANÇA PÚBLICA', 148.5, 13, { align: 'center' });
+  doc.text('CORPO DE BOMBEIROS MILITAR DO RIO GRANDE DO SUL - CBMRS', 148.5, 17, { align: 'center' });
+  doc.setFontSize(10.5);
+  doc.text(`ESCALA MENSAL DE SERVIÇO - 1º PELOTÃO DE BOMBEIRO MILITAR (IJUÍ/RS) - ${monthName} DE ${year}`, 148.5, 22, { align: 'center' });
 
-  const headRow1: string[] = ['POSTO/GRAD', 'NOME DE GUERRA'];
-  const headRow2: string[] = ['', ''];
+  const headRow1: string[] = ['POSTO/GRAD', 'ID FUNC.', 'NOME DE GUERRA'];
+  const headRow2: string[] = ['', '', ''];
 
   for (let d = 1; d <= numDays; d++) {
     const date = new Date(year, month - 1, d);
@@ -46,9 +47,15 @@ export function exportScheduleToPDF(
   }, {} as Record<string, typeof stats[0]>);
 
   const bodyData = personnel.map(p => {
-    const row: string[] = [p.rank, p.warName];
+    const row: string[] = [p.rank, p.matricula || '-', p.warName];
     for (let d = 1; d <= numDays; d++) {
-      row.push(schedule[d]?.[p.id] || '');
+      const code = schedule[d]?.[p.id] || '';
+      if (code) {
+        const role = getRoleAbbr(p, code);
+        row.push(role ? `${code}\n${role}` : code);
+      } else {
+        row.push('');
+      }
     }
 
     const s = statsMap[p.id];
@@ -63,7 +70,7 @@ export function exportScheduleToPDF(
     return row;
   });
 
-  const totalRow: string[] = ['TOTAL ME', 'DE SERVIÇO'];
+  const totalRow: string[] = ['TOTAL ME', '-', 'DE SERVIÇO'];
   for (let d = 1; d <= numDays; d++) {
     let count = 0;
     personnel.forEach(p => {
@@ -77,10 +84,10 @@ export function exportScheduleToPDF(
   autoTable(doc, {
     head: [headRow1, headRow2],
     body: bodyData,
-    startY: 28,
+    startY: 26,
     styles: {
-      fontSize: 6,
-      cellPadding: 0.8,
+      fontSize: 5.5,
+      cellPadding: 0.6,
       halign: 'center',
       valign: 'middle'
     },
@@ -90,27 +97,29 @@ export function exportScheduleToPDF(
       fontStyle: 'bold'
     },
     columnStyles: {
-      0: { halign: 'left', cellWidth: 20 },
-      1: { halign: 'left', cellWidth: 24 }
+      0: { halign: 'left', cellWidth: 16 },
+      1: { halign: 'center', cellWidth: 14 },
+      2: { halign: 'left', cellWidth: 20 }
     },
     didParseCell: (data) => {
-      if (data.section === 'head' && data.column.index >= 2 && data.column.index < 2 + numDays) {
-        const d = data.column.index - 1;
+      if (data.section === 'head' && data.column.index >= 3 && data.column.index < 3 + numDays) {
+        const d = data.column.index - 2;
         const date = new Date(year, month - 1, d);
         if (date.getDay() === 0 || date.getDay() === 6) {
           data.cell.styles.fillColor = [30, 41, 59];
+          data.cell.styles.textColor = [248, 113, 113];
         }
       }
 
       if (data.section === 'body') {
         const val = String(data.cell.raw);
-        if (val === 'J') {
-          data.cell.styles.textColor = [220, 38, 38];
+        if (val.startsWith('J')) {
+          data.cell.styles.textColor = [185, 28, 28];
           data.cell.styles.fontStyle = 'bold';
-        } else if (val === 'FER') {
+        } else if (val.startsWith('FER')) {
           data.cell.styles.fillColor = [254, 240, 138];
           data.cell.styles.textColor = [133, 77, 14];
-        } else if (val === 'RSP') {
+        } else if (val.startsWith('RSP')) {
           data.cell.styles.fillColor = [209, 250, 229];
           data.cell.styles.textColor = [6, 95, 70];
         } else if (val === 'FALTA') {
@@ -121,7 +130,7 @@ export function exportScheduleToPDF(
     }
   });
 
-  const finalY = (doc as any).lastAutoTable.finalY + 14;
+  const finalY = (doc as any).lastAutoTable.finalY + 12;
   if (finalY < 195) {
     doc.setFontSize(8);
     doc.text('___________________________________________', 60, finalY, { align: 'center' });
@@ -142,7 +151,7 @@ export function exportScheduleToExcel(
   const { year, month, numDays } = config;
   const monthName = MONTH_NAMES[month - 1];
 
-  const headers: string[] = ['Posto/Graduação', 'Nome de Guerra'];
+  const headers: string[] = ['Posto/Graduação', 'ID Funcional', 'Nome de Guerra', 'Função Principal'];
   for (let d = 1; d <= numDays; d++) {
     headers.push(`Dia ${d}`);
   }
@@ -157,11 +166,19 @@ export function exportScheduleToExcel(
   const rows = personnel.map(p => {
     const row: any = {
       'Posto/Graduação': p.rank,
-      'Nome de Guerra': p.warName
+      'ID Funcional': p.matricula || '-',
+      'Nome de Guerra': p.warName,
+      'Função Principal': p.role || 'Operacional'
     };
 
     for (let d = 1; d <= numDays; d++) {
-      row[`Dia ${d}`] = schedule[d]?.[p.id] || '';
+      const code = schedule[d]?.[p.id] || '';
+      if (code) {
+        const role = getRoleAbbr(p, code);
+        row[`Dia ${d}`] = role ? `${code} (${role})` : code;
+      } else {
+        row[`Dia ${d}`] = '';
+      }
     }
 
     const s = statsMap[p.id];
