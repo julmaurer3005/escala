@@ -81,7 +81,7 @@ export const PersonnelManager: React.FC<PersonnelManagerProps> = ({
   const [formRank, setFormRank] = useState<RankType>('SOLDADO');
   const [formWarName, setFormWarName] = useState('');
   const [formMatricula, setFormMatricula] = useState('');
-  const [formRole, setFormRole] = useState<'Comandante' | 'Chefe de Socorro' | 'Motorista' | 'Socorrista' | 'Operacional' | 'Sargenteante'>('Socorrista');
+  const [formRole, setFormRole] = useState<string>('Socorrista');
   const [formIsCommander, setFormIsCommander] = useState(false);
   const [formStatus, setFormStatus] = useState<MilitarStatus>('ATIVO');
 
@@ -809,12 +809,13 @@ export const PersonnelManager: React.FC<PersonnelManagerProps> = ({
                 <label className="text-xs font-bold text-slate-400 block mb-1">Função no Quartel</label>
                 <select
                   value={formRole}
-                  onChange={e => setFormRole(e.target.value as any)}
+                  onChange={e => setFormRole(e.target.value)}
                   className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-xs font-bold text-white outline-none"
                 >
-                  <option value="Socorrista">Socorrista / Linha de Ataque</option>
-                  <option value="Motorista">Motorista / Condutor (ABT/Resgate)</option>
                   <option value="Chefe de Socorro">Chefe de Socorro (Comandante Guarnição)</option>
+                  <option value="Motorista">Motorista / Condutor (ABT/Resgate - COV)</option>
+                  <option value="Socorrista">Socorrista / Linha de Ataque</option>
+                  <option value="Prevenção">Prevenção / Vistoria de Incêndio</option>
                   <option value="Sargenteante">Sargenteante</option>
                   <option value="Comandante">Comandante do Pelotão</option>
                   <option value="Operacional">Operacional Geral</option>

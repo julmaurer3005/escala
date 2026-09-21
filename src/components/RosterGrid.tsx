@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
 import type { Militar, MonthConfig, ScheduleStats } from '../types';
-import { DAYS_OF_WEEK_SHORT, SHIFT_MAP, getShiftHours } from '../data/constants';
+import { DAYS_OF_WEEK_SHORT, SHIFT_MAP, getShiftHours, ROLE_OPTIONS, getRoleOption } from '../data/constants';
 import { ShiftPopover } from './ShiftPopover';
-import { Plus, Minus } from 'lucide-react';
+import { Plus, Minus, ChevronDown } from 'lucide-react';
 
 interface RosterGridProps {
   personnel: Militar[];
@@ -11,36 +11,13 @@ interface RosterGridProps {
   stats: ScheduleStats[];
   onUpdateCell: (militarId: string, day: number, code: string) => void;
   onChangeDailyRequired: (day: number, delta: number) => void;
+  onUpdateMilitar?: (militar: Militar) => void;
 }
 
-export const getRoleAbbr = (militar: Militar, code: string): string => {
-  if (!code) return '';
-  const upper = code.trim().toUpperCase();
-
-  // If operational shift (J, 1, 2, 3, 4, etc.)
-  if (upper === 'J' || ['1', '2', '3', '4', '41', '23', '34', '123', '234', '341'].includes(upper)) {
-    if (militar.isCommander || militar.rank.includes('Tenente')) return 'CMTE';
-    const role = (militar.role || '').toLowerCase();
-    if (role.includes('chefe') || militar.rank.includes('SARGENTO')) return 'CHEFE';
-    if (role.includes('motorista') || role.includes('condutor') || role.includes('cov')) return 'COV';
-    if (role.includes('prevenção') || role.includes('prevencao')) return 'PREVENÇÃO';
-    if (role.includes('sargenteante')) return 'SARG';
-    if (role.includes('socorrista')) return 'SOCORRISTA';
-    return 'SOCORRISTA';
-  }
-
-  if (upper.startsWith('EXP')) return 'EXP';
-  if (upper.startsWith('OS')) return 'OS';
-  if (upper === 'FER') return 'FÉRIAS';
-  if (upper === 'RSP') return 'RSP';
-  if (upper === 'LTS') return 'LTS';
-  if (upper === 'LFC') return 'LFC';
-  if (upper === 'PRE') return 'PRE';
-  if (upper === 'FC') return 'FC';
-  if (upper.startsWith('C') && !upper.startsWith('CM')) return 'CURSO';
-  if (upper.startsWith('CM')) return 'CHAM';
-
-  return '';
+export const getRoleAbbr = (militar: Militar): string => {
+  if (militar.isCommander || militar.rank.includes('Tenente')) return 'CMTE';
+  const roleOpt = getRoleOption(militar.role);
+  return roleOpt.shortLabel;
 };
 
 export const RosterGrid: React.FC<RosterGridProps> = ({
@@ -49,7 +26,8 @@ export const RosterGrid: React.FC<RosterGridProps> = ({
   config,
   stats,
   onUpdateCell,
-  onChangeDailyRequired
+  onChangeDailyRequired,
+  onUpdateMilitar
 }) => {
   const { year, month, numDays, dailyRequiredStaff } = config;
 
@@ -78,6 +56,15 @@ export const RosterGrid: React.FC<RosterGridProps> = ({
     return getShiftHours(todayShift) > 0 && getShiftHours(prevShift) > 0;
   };
 
+  const handleRoleChange = (militar: Militar, newRole: string) => {
+    if (onUpdateMilitar) {
+      onUpdateMilitar({
+        ...militar,
+        role: newRole
+      });
+    }
+  };
+
   return (
     <div className="w-full bg-slate-900 border border-slate-800 rounded-2xl shadow-xl overflow-hidden flex flex-col">
       
@@ -93,8 +80,8 @@ export const RosterGrid: React.FC<RosterGridProps> = ({
               <th className="sticky left-[96px] z-40 bg-slate-950 px-2 py-2 font-bold w-24 min-w-[96px] max-w-[96px] text-center text-slate-400 border-r border-slate-800">
                 ID FUNCIONAL
               </th>
-              <th className="sticky left-[192px] z-40 bg-slate-950 px-4 py-2 font-bold w-36 min-w-[144px] max-w-[144px] text-slate-300 border-r border-slate-800 shadow-[2px_0_5px_rgba(0,0,0,0.3)]">
-                NOME DE GUERRA
+              <th className="sticky left-[192px] z-40 bg-slate-950 px-3 py-2 font-bold w-44 min-w-[176px] max-w-[176px] text-slate-300 border-r border-slate-800 shadow-[2px_0_5px_rgba(0,0,0,0.3)]">
+                NOME & FUNÇÃO
               </th>
 
               {Array.from({ length: numDays }, (_, i) => i + 1).map(day => {
@@ -102,7 +89,7 @@ export const RosterGrid: React.FC<RosterGridProps> = ({
                 return (
                   <th
                     key={`day-${day}`}
-                    className={`px-1 py-1 text-center font-black min-w-[48px] max-w-[54px] border-r border-slate-800/80 ${
+                    className={`px-1 py-1 text-center font-black min-w-[44px] max-w-[50px] border-r border-slate-800/80 ${
                       isWk ? 'bg-slate-900 text-red-400' : 'bg-slate-950 text-slate-200'
                     }`}
                   >
@@ -129,7 +116,7 @@ export const RosterGrid: React.FC<RosterGridProps> = ({
               <th className="sticky left-[96px] z-40 bg-slate-950 px-2 py-1 font-semibold text-center text-slate-500 border-r border-slate-800 font-mono text-[9px]">
                 MATRÍCULA
               </th>
-              <th className="sticky left-[192px] z-40 bg-slate-950 px-4 py-1 font-semibold text-slate-500 border-r border-slate-800 shadow-[2px_0_5px_rgba(0,0,0,0.3)]">
+              <th className="sticky left-[192px] z-40 bg-slate-950 px-3 py-1 font-semibold text-slate-500 border-r border-slate-800 shadow-[2px_0_5px_rgba(0,0,0,0.3)]">
                 EFETIVO ({personnel.length})
               </th>
 
@@ -159,6 +146,7 @@ export const RosterGrid: React.FC<RosterGridProps> = ({
               const s = statsMap[militar.id];
               const isEven = pIndex % 2 === 0;
               const isCmte = militar.isCommander;
+              const roleOpt = getRoleOption(militar.role);
 
               return (
                 <tr 
@@ -185,23 +173,48 @@ export const RosterGrid: React.FC<RosterGridProps> = ({
                     {militar.matricula || '-'}
                   </td>
 
-                  {/* NOME DE GUERRA */}
-                  <td className="sticky left-[192px] z-20 bg-slate-900 px-4 py-2 font-black text-slate-100 border-r border-slate-800 w-36 min-w-[144px] max-w-[144px] whitespace-nowrap shadow-[2px_0_5px_rgba(0,0,0,0.3)]">
-                    <div className="flex items-center gap-1.5">
-                      <span>{militar.warName}</span>
-                      {isCmte && (
-                        <span className="text-[9px] font-bold text-amber-400 bg-amber-950/60 border border-amber-500/30 px-1 rounded">
-                          CMTE
+                  {/* NOME DE GUERRA & FUNÇÃO (2-LINE DISPLAY WITH INLINE SELECTOR) */}
+                  <td className="sticky left-[192px] z-20 bg-slate-900 px-3 py-2 border-r border-slate-800 w-44 min-w-[176px] max-w-[176px] shadow-[2px_0_5px_rgba(0,0,0,0.3)]">
+                    <div className="flex flex-col gap-1">
+                      {/* Line 1: War Name */}
+                      <div className="flex items-center justify-between gap-1">
+                        <span className="font-black text-white text-xs tracking-wide truncate">
+                          {militar.warName}
                         </span>
-                      )}
+                        {isCmte && (
+                          <span className="text-[9px] font-bold text-amber-400 bg-amber-950/60 border border-amber-500/30 px-1 rounded shrink-0">
+                            CMTE
+                          </span>
+                        )}
+                      </div>
+
+                      {/* Line 2: Role Selector / Badge */}
+                      <div className="relative group/role">
+                        <select
+                          value={militar.role || (isCmte ? 'Comandante' : militar.rank.includes('SARGENTO') ? 'Chefe de Socorro' : 'Socorrista')}
+                          onChange={(e) => handleRoleChange(militar, e.target.value)}
+                          className={`w-full text-[9.5px] font-black uppercase tracking-tight py-0.5 pl-1.5 pr-4 rounded-md border outline-none cursor-pointer appearance-none transition shadow-2xs ${roleOpt.badgeClass}`}
+                          title="Clique para alterar a função operacional deste militar"
+                        >
+                          {ROLE_OPTIONS.map(opt => (
+                            <option 
+                              key={opt.value} 
+                              value={opt.value} 
+                              className="bg-slate-950 text-white font-bold text-xs py-1"
+                            >
+                              {opt.shortLabel} • {opt.label}
+                            </option>
+                          ))}
+                        </select>
+                        <ChevronDown className="w-2.5 h-2.5 absolute right-1 top-1/2 -translate-y-1/2 pointer-events-none opacity-60 text-current" />
+                      </div>
                     </div>
                   </td>
 
-                  {/* DAYS WITH 2-LINE SHIFT + ROLE CELL */}
+                  {/* DAYS WITH CLEAN SINGLE SHIFT BADGES */}
                   {Array.from({ length: numDays }, (_, i) => i + 1).map(day => {
                     const code = schedule[day]?.[militar.id] || '';
                     const shiftDef = SHIFT_MAP[code];
-                    const roleAbbr = getRoleAbbr(militar, code);
                     const isWk = isWeekendDay(day);
                     const conflict = hasInterjornadaConflict(militar.id, day);
 
@@ -214,16 +227,13 @@ export const RosterGrid: React.FC<RosterGridProps> = ({
                         }`}
                       >
                         {code ? (
-                          <div className={`mx-auto w-11 min-h-[42px] flex flex-col items-center justify-center py-0.5 px-0.5 rounded-lg border transition transform group-hover:scale-105 ${
+                          <div className={`mx-auto w-9 h-7 flex items-center justify-center rounded-lg border font-black text-xs transition transform group-hover:scale-105 shadow-xs ${
                             shiftDef ? `${shiftDef.bgColor} ${shiftDef.textColor} ${shiftDef.borderColor}` : 'bg-slate-800 text-slate-200 border-slate-700'
                           }`}>
-                            <span className="text-[11px] font-black leading-tight">{code}</span>
-                            <span className="text-[8px] font-bold opacity-90 uppercase tracking-tighter leading-tight mt-0.5 truncate max-w-[42px]">
-                              {roleAbbr}
-                            </span>
+                            <span>{code}</span>
                           </div>
                         ) : (
-                          <div className="w-11 min-h-[42px] mx-auto rounded flex items-center justify-center text-slate-700 group-hover:text-slate-500 text-xs">
+                          <div className="w-9 h-7 mx-auto rounded flex items-center justify-center text-slate-700 group-hover:text-slate-500 text-xs font-semibold">
                             -
                           </div>
                         )}
@@ -275,7 +285,7 @@ export const RosterGrid: React.FC<RosterGridProps> = ({
               <td className="sticky left-[96px] z-40 bg-slate-950 px-2 py-2.5 text-center text-slate-500 border-r border-slate-800 w-24 min-w-[96px] max-w-[96px]">
                 -
               </td>
-              <td className="sticky left-[192px] z-40 bg-slate-950 px-4 py-2.5 text-slate-300 font-extrabold border-r border-slate-800 w-36 min-w-[144px] max-w-[144px] shadow-[2px_0_5px_rgba(0,0,0,0.3)]">
+              <td className="sticky left-[192px] z-40 bg-slate-950 px-3 py-2.5 text-slate-300 font-extrabold border-r border-slate-800 w-44 min-w-[176px] max-w-[176px] shadow-[2px_0_5px_rgba(0,0,0,0.3)]">
                 DE SERVIÇO
               </td>
 
@@ -316,7 +326,7 @@ export const RosterGrid: React.FC<RosterGridProps> = ({
               <td className="sticky left-[96px] z-40 bg-slate-900 px-2 py-2 text-center text-slate-500 border-r border-slate-800 w-24 min-w-[96px] max-w-[96px]">
                 -
               </td>
-              <td className="sticky left-[192px] z-40 bg-slate-900 px-4 py-2 text-slate-400 border-r border-slate-800 w-36 min-w-[144px] max-w-[144px] shadow-[2px_0_5px_rgba(0,0,0,0.3)]">
+              <td className="sticky left-[192px] z-40 bg-slate-900 px-3 py-2 text-slate-400 border-r border-slate-800 w-44 min-w-[176px] max-w-[176px] shadow-[2px_0_5px_rgba(0,0,0,0.3)]">
                 TAMANHO PREVISTO
               </td>
 

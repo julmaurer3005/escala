@@ -542,6 +542,7 @@ export function App() {
             stats={stats}
             onUpdateCell={handleUpdateCell}
             onChangeDailyRequired={handleChangeDailyRequired}
+            onUpdateMilitar={handleUpdateMilitar}
           />
         )}
 

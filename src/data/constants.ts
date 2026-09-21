@@ -81,3 +81,36 @@ export const MONTH_NAMES = [
 ];
 
 export const DAYS_OF_WEEK_SHORT = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
+
+export interface RoleOption {
+  value: string;
+  label: string;
+  shortLabel: string;
+  badgeClass: string;
+}
+
+export const ROLE_OPTIONS: RoleOption[] = [
+  { value: 'Chefe de Socorro', label: 'Chefe de Socorro', shortLabel: 'CHEFE', badgeClass: 'bg-amber-500/20 text-amber-300 border-amber-500/40' },
+  { value: 'Motorista', label: 'Motorista (COV)', shortLabel: 'COV', badgeClass: 'bg-cyan-500/20 text-cyan-300 border-cyan-500/40' },
+  { value: 'Socorrista', label: 'Socorrista', shortLabel: 'SOCORRISTA', badgeClass: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40' },
+  { value: 'Prevenção', label: 'Prevenção / Vistoria', shortLabel: 'PREVENÇÃO', badgeClass: 'bg-purple-500/20 text-purple-300 border-purple-500/40' },
+  { value: 'Sargenteante', label: 'Sargenteante', shortLabel: 'SARG', badgeClass: 'bg-indigo-500/20 text-indigo-300 border-indigo-500/40' },
+  { value: 'Comandante', label: 'Comandante', shortLabel: 'CMTE', badgeClass: 'bg-yellow-500/25 text-yellow-300 border-yellow-500/50' },
+  { value: 'Operacional', label: 'Operacional Geral', shortLabel: 'OPERACIONAL', badgeClass: 'bg-slate-800 text-slate-300 border-slate-700' }
+];
+
+export const getRoleOption = (roleName?: string): RoleOption => {
+  if (!roleName) return ROLE_OPTIONS[2]; // Default Socorrista
+  const found = ROLE_OPTIONS.find(r => r.value.toLowerCase() === roleName.toLowerCase() || r.shortLabel.toLowerCase() === roleName.toLowerCase());
+  if (found) return found;
+
+  const lower = roleName.toLowerCase();
+  if (lower.includes('chefe')) return ROLE_OPTIONS[0];
+  if (lower.includes('motorista') || lower.includes('cov') || lower.includes('condutor')) return ROLE_OPTIONS[1];
+  if (lower.includes('socorrista')) return ROLE_OPTIONS[2];
+  if (lower.includes('preven')) return ROLE_OPTIONS[3];
+  if (lower.includes('sarg')) return ROLE_OPTIONS[4];
+  if (lower.includes('cmte') || lower.includes('comandante')) return ROLE_OPTIONS[5];
+
+  return ROLE_OPTIONS[6];
+};

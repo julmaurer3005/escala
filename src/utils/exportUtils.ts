@@ -47,15 +47,13 @@ export function exportScheduleToPDF(
   }, {} as Record<string, typeof stats[0]>);
 
   const bodyData = personnel.map(p => {
-    const row: string[] = [p.rank, p.matricula || '-', p.warName];
+    const roleAbbr = getRoleAbbr(p);
+    const nameWithRole = roleAbbr ? `${p.warName}\n(${roleAbbr})` : p.warName;
+    const row: string[] = [p.rank, p.matricula || '-', nameWithRole];
+    
     for (let d = 1; d <= numDays; d++) {
       const code = schedule[d]?.[p.id] || '';
-      if (code) {
-        const role = getRoleAbbr(p, code);
-        row.push(role ? `${code}\n${role}` : code);
-      } else {
-        row.push('');
-      }
+      row.push(code);
     }
 
     const s = statsMap[p.id];
@@ -173,12 +171,7 @@ export function exportScheduleToExcel(
 
     for (let d = 1; d <= numDays; d++) {
       const code = schedule[d]?.[p.id] || '';
-      if (code) {
-        const role = getRoleAbbr(p, code);
-        row[`Dia ${d}`] = role ? `${code} (${role})` : code;
-      } else {
-        row[`Dia ${d}`] = '';
-      }
+      row[`Dia ${d}`] = code;
     }
 
     const s = statsMap[p.id];

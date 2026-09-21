@@ -1,10 +1,10 @@
-export type RankType = 
-  | '1º Tenente' 
-  | '1º Sargento' 
-  | '2º Sargento' 
-  | '3º Sargento' 
-  | 'SARGENTO' 
-  | 'CABO' 
+export type RankType =
+  | '1º Tenente'
+  | '1º Sargento'
+  | '2º Sargento'
+  | '3º Sargento'
+  | 'SARGENTO'
+  | 'CABO'
   | 'SOLDADO'
   | 'REFORÇO';
 
@@ -18,6 +18,15 @@ export interface VacationRange {
   description?: string;
 }
 
+export type MilitarRole =
+  | 'Chefe de Socorro'
+  | 'Motorista'
+  | 'Socorrista'
+  | 'Prevenção'
+  | 'Sargenteante'
+  | 'Operacional'
+  | string;
+
 export interface Militar {
   id: string;
   matricula?: string;
@@ -26,7 +35,7 @@ export interface Militar {
   isCommander?: boolean;
   isActive?: boolean;
   status?: MilitarStatus;
-  role?: 'Comandante' | 'Chefe de Socorro' | 'Motorista' | 'Socorrista' | 'Operacional' | 'Sargenteante';
+  role?: MilitarRole;
   vacations?: VacationRange[];
 }
 
