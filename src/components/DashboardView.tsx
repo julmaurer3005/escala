@@ -8,7 +8,8 @@ import {
   Users 
 } from 'lucide-react';
 import type { Militar, MonthConfig, ScheduleStats } from '../types';
-import { getShiftHours } from '../data/constants';
+import { calculateDayTotalME } from '../data/constants';
+
 
 interface DashboardViewProps {
   personnel: Militar[];
@@ -37,11 +38,8 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
   const understaffedDays: number[] = [];
   for (let d = 1; d <= numDays; d++) {
-    let count = 0;
-    personnel.forEach(p => {
-      if (!p.isCommander && getShiftHours(schedule[d]?.[p.id]) > 0) count++;
-    });
-    if (count < (config.dailyRequiredStaff[d] || 4)) {
+    const totalME = calculateDayTotalME(schedule[d], personnel);
+    if (totalME < (config.dailyRequiredStaff[d] || 4)) {
       understaffedDays.push(d);
     }
   }

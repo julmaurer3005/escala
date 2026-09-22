@@ -294,14 +294,16 @@ export function generateAutomatedSchedule(
           if (!weekends.has(weekendId) && weekends.size >= maxWeekends) continue;
         }
 
-        let staffCount = 0;
+        let totalDayHours = 0;
         operationalPersonnel.forEach(other => {
           const c = newSchedule[d]?.[other.id];
-          if (getShiftHours(c) > 0) staffCount++;
+          totalDayHours += getShiftHours(c);
         });
+        const staffCount = totalDayHours / 24;
 
         possibleDays.push({ day: d, isWeekend, weekendId, staffCount });
       }
+
 
       possibleDays.sort((a, b) => {
         if (a.isWeekend !== b.isWeekend) return a.isWeekend ? 1 : -1;

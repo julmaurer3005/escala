@@ -2,7 +2,8 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import * as XLSX from 'xlsx';
 import type { Militar, MonthConfig, Unit } from '../types';
-import { MONTH_NAMES, DAYS_OF_WEEK_SHORT, getShiftHours, parseShiftCell } from '../data/constants';
+import { MONTH_NAMES, DAYS_OF_WEEK_SHORT, parseShiftCell, calculateDayTotalME, formatTotalME } from '../data/constants';
+
 import { computeScheduleStats } from './schedulerEngine';
 
 export function exportScheduleToPDF(
@@ -80,14 +81,12 @@ export function exportScheduleToPDF(
 
   const totalRow: string[] = ['TOTAL ME', '-', 'DE SERVIÇO'];
   for (let d = 1; d <= numDays; d++) {
-    let count = 0;
-    personnel.forEach(p => {
-      if (!p.isCommander && getShiftHours(schedule[d]?.[p.id]) > 0) count++;
-    });
-    totalRow.push(String(count));
+    const totalME = calculateDayTotalME(schedule[d], personnel);
+    totalRow.push(formatTotalME(totalME));
   }
   totalRow.push('-', '-', '-');
   bodyData.push(totalRow);
+
 
   autoTable(doc, {
     head: [headRow1, headRow2],
@@ -223,6 +222,21 @@ export function exportScheduleToExcel(
     return row;
   });
 
+  const totalRow: any = {
+    'Posto/Graduação': 'TOTAL ME',
+    'ID Funcional': '-',
+    'Nome de Guerra': 'DE SERVIÇO',
+    'Função Principal': '-'
+  };
+  for (let d = 1; d <= numDays; d++) {
+    const totalME = calculateDayTotalME(schedule[d], personnel);
+    totalRow[`Dia ${d}`] = formatTotalME(totalME);
+  }
+  totalRow['Carga Mensal'] = '-';
+  totalRow['Horas Trabalhadas'] = '-';
+  totalRow['Horas Extras / Saldo'] = '-';
+  rows.push(totalRow);
+
   const ws = XLSX.utils.json_to_sheet(rows, { header: headers });
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, `Escala ${monthName}`);
@@ -230,4 +244,5 @@ export function exportScheduleToExcel(
   const safeUnitCode = unit.code.replace(/[^a-zA-Z0-9]/g, '_');
   XLSX.writeFile(wb, `Escala_CBMRS_${safeUnitCode}_${monthName}_${year}.xlsx`);
 }
+
 

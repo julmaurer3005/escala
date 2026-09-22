@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
 import type { Militar, MonthConfig, ScheduleStats } from '../types';
-import { DAYS_OF_WEEK_SHORT, SHIFT_MAP, getShiftHours, parseShiftCell, getDailyRoleBadgeStyle } from '../data/constants';
+import { DAYS_OF_WEEK_SHORT, SHIFT_MAP, getShiftHours, parseShiftCell, getDailyRoleBadgeStyle, calculateDayTotalME, formatTotalME } from '../data/constants';
 import { ShiftPopover } from './ShiftPopover';
 import { Plus, Minus } from 'lucide-react';
+
 
 interface RosterGridProps {
   personnel: Militar[];
@@ -264,13 +265,9 @@ export const RosterGrid: React.FC<RosterGridProps> = ({
               </td>
 
               {Array.from({ length: numDays }, (_, i) => i + 1).map(day => {
-                let count = 0;
-                personnel.forEach(p => {
-                  if (!p.isCommander && getShiftHours(schedule[day]?.[p.id]) > 0) count++;
-                });
-
+                const totalME = calculateDayTotalME(schedule[day], personnel);
                 const req = dailyRequiredStaff[day] || 4;
-                const isUnderstaffed = count < req;
+                const isUnderstaffed = totalME < req;
 
                 return (
                   <td
@@ -278,15 +275,16 @@ export const RosterGrid: React.FC<RosterGridProps> = ({
                     className={`px-1 py-2 text-center font-black text-sm border-r border-slate-800 ${
                       isUnderstaffed 
                         ? 'bg-red-500/20 text-red-400 animate-pulse font-black' 
-                        : count > req 
+                        : totalME > req 
                           ? 'text-amber-400' 
                           : 'text-emerald-400'
                     }`}
                   >
-                    {count}
+                    {formatTotalME(totalME)}
                   </td>
                 );
               })}
+
 
               <td className="bg-slate-950 text-center text-slate-500 border-l border-slate-800">-</td>
               <td className="bg-slate-950 text-center text-slate-500 border-l border-slate-800">-</td>

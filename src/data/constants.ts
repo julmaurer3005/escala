@@ -117,7 +117,51 @@ export const getShiftHours = (code: string | undefined): number => {
   return 0;
 };
 
+export const OPERATIONAL_ME_HOURS_MAP: Record<string, number> = {
+  'J': 24,
+  '23': 12,
+  '41': 12,
+  '34': 12,
+  '1': 6,
+  '2': 6,
+  '3': 6,
+  '4': 6,
+  '123': 18,
+  '341': 18,
+  '234': 18
+};
+
+export const getOperationalShiftHours = (code: string | undefined): number => {
+  if (!code) return 0;
+  const raw = code.trim().toUpperCase();
+  const baseCode = raw.includes(':') ? raw.split(':')[0].trim() : raw.includes('|') ? raw.split('|')[0].trim() : raw;
+  return OPERATIONAL_ME_HOURS_MAP[baseCode] || 0;
+};
+
+export const calculateDayTotalME = (
+  scheduleForDay: Record<string, string> | undefined,
+  personnel: Militar[]
+): number => {
+  if (!scheduleForDay) return 0;
+  let totalHours = 0;
+  personnel.forEach(p => {
+    if (!p.isCommander) {
+      const code = scheduleForDay[p.id];
+      totalHours += getOperationalShiftHours(code);
+    }
+  });
+  return totalHours / 24;
+};
+
+export const formatTotalME = (totalME: number): string => {
+  if (totalME === 0) return '0';
+  if (Number.isInteger(totalME)) return String(totalME);
+  return Number(totalME.toFixed(2)).toString();
+};
+
+
 export const DEFAULT_PERSONNEL: Militar[] = [
+
   { id: '1', rank: '1º Tenente', warName: 'AGNOLETTO', isCommander: true, role: 'Comandante', isActive: true },
   { id: '2', rank: 'SARGENTO', warName: 'VICTOR', isCommander: false, role: 'Sargenteante', isActive: true },
   { id: '3', rank: 'SARGENTO', warName: 'KOMMERS', isCommander: false, role: 'Chefe de Socorro', isActive: true },
