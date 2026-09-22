@@ -1,4 +1,4 @@
-import type { Militar, MonthConfig } from '../types';
+import type { Militar, MonthConfig, Unit } from '../types';
 
 const API_BASE = '/api';
 
@@ -23,17 +23,62 @@ export async function checkServerHealth(): Promise<HealthResponse> {
   }
 }
 
-export async function fetchPersonnel(): Promise<Militar[]> {
-  const res = await fetch(`${API_BASE}/personnel`);
+// ==========================================
+// UNITS API
+// ==========================================
+
+export async function fetchUnits(): Promise<Unit[]> {
+  const res = await fetch(`${API_BASE}/units`);
+  if (!res.ok) throw new Error('Falha ao carregar unidades do SQLite');
+  return res.json();
+}
+
+export async function createUnit(unit: { id?: string; name: string; code: string; city: string }): Promise<{ success: boolean; unit: Unit }> {
+  const res = await fetch(`${API_BASE}/units`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(unit)
+  });
+  if (!res.ok) throw new Error('Falha ao cadastrar unidade no SQLite');
+  return res.json();
+}
+
+export async function updateUnit(unit: Unit): Promise<{ success: boolean }> {
+  const res = await fetch(`${API_BASE}/units/${unit.id}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(unit)
+  });
+  if (!res.ok) throw new Error('Falha ao atualizar unidade no SQLite');
+  return res.json();
+}
+
+export async function deleteUnit(unitId: string): Promise<{ success: boolean }> {
+  const res = await fetch(`${API_BASE}/units/${unitId}`, {
+    method: 'DELETE'
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.error || 'Falha ao excluir unidade do SQLite');
+  }
+  return res.json();
+}
+
+// ==========================================
+// PERSONNEL API
+// ==========================================
+
+export async function fetchPersonnel(unitId = 'pelbm_ijui'): Promise<Militar[]> {
+  const res = await fetch(`${API_BASE}/personnel?unitId=${encodeURIComponent(unitId)}`);
   if (!res.ok) throw new Error('Falha ao carregar efetivo do SQLite');
   return res.json();
 }
 
-export async function addMilitar(militar: Militar, targetIndex?: number): Promise<{ success: boolean; id: string }> {
+export async function addMilitar(militar: Militar, targetIndex?: number, unitId = 'pelbm_ijui'): Promise<{ success: boolean; id: string }> {
   const res = await fetch(`${API_BASE}/personnel`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ ...militar, targetIndex })
+    body: JSON.stringify({ ...militar, unitId, targetIndex })
   });
   if (!res.ok) throw new Error('Falha ao cadastrar militar no SQLite');
   return res.json();
@@ -57,61 +102,65 @@ export async function removeMilitar(id: string): Promise<{ success: boolean }> {
   return res.json();
 }
 
-export async function reorderPersonnel(startIndex: number, endIndex: number): Promise<{ success: boolean }> {
+export async function reorderPersonnel(startIndex: number, endIndex: number, unitId = 'pelbm_ijui'): Promise<{ success: boolean }> {
   const res = await fetch(`${API_BASE}/personnel/reorder`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ startIndex, endIndex })
+    body: JSON.stringify({ startIndex, endIndex, unitId })
   });
   if (!res.ok) throw new Error('Falha ao reordenar antiguidade no SQLite');
   return res.json();
 }
 
-export async function resetPersonnel(): Promise<{ success: boolean }> {
-  const res = await fetch(`${API_BASE}/personnel/reset`, {
+export async function resetPersonnel(unitId = 'pelbm_ijui'): Promise<{ success: boolean }> {
+  const res = await fetch(`${API_BASE}/personnel/reset?unitId=${encodeURIComponent(unitId)}`, {
     method: 'POST'
   });
   if (!res.ok) throw new Error('Falha ao restaurar efetivo padrão no SQLite');
   return res.json();
 }
 
-export async function fetchScheduleAndConfig(year: number, month: number): Promise<{ config: MonthConfig; schedule: Record<number, Record<string, string>> }> {
-  const res = await fetch(`${API_BASE}/schedule/${year}/${month}`);
+// ==========================================
+// SCHEDULE & CONFIG API
+// ==========================================
+
+export async function fetchScheduleAndConfig(year: number, month: number, unitId = 'pelbm_ijui'): Promise<{ config: MonthConfig; schedule: Record<number, Record<string, string>> }> {
+  const res = await fetch(`${API_BASE}/schedule/${year}/${month}?unitId=${encodeURIComponent(unitId)}`);
   if (!res.ok) throw new Error('Falha ao carregar escala do SQLite');
   return res.json();
 }
 
-export async function updateScheduleCell(year: number, month: number, day: number, militarId: string, code: string): Promise<{ success: boolean }> {
+export async function updateScheduleCell(year: number, month: number, day: number, militarId: string, code: string, unitId = 'pelbm_ijui'): Promise<{ success: boolean }> {
   const res = await fetch(`${API_BASE}/schedule/${year}/${month}/cell`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ day, militarId, code })
+    body: JSON.stringify({ day, militarId, code, unitId })
   });
   if (!res.ok) throw new Error('Falha ao atualizar célula no SQLite');
   return res.json();
 }
 
-export async function bulkUpdateSchedule(year: number, month: number, schedule: Record<number, Record<string, string>>): Promise<{ success: boolean }> {
+export async function bulkUpdateSchedule(year: number, month: number, schedule: Record<number, Record<string, string>>, unitId = 'pelbm_ijui'): Promise<{ success: boolean }> {
   const res = await fetch(`${API_BASE}/schedule/${year}/${month}/bulk`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ schedule })
+    body: JSON.stringify({ schedule, unitId })
   });
   if (!res.ok) throw new Error('Falha ao gravar escala completa no SQLite');
   return res.json();
 }
 
-export async function updateMonthConfig(year: number, month: number, config: MonthConfig): Promise<{ success: boolean }> {
+export async function updateMonthConfig(year: number, month: number, config: MonthConfig, unitId = 'pelbm_ijui'): Promise<{ success: boolean }> {
   const res = await fetch(`${API_BASE}/config/${year}/${month}`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(config)
+    body: JSON.stringify({ ...config, unitId })
   });
   if (!res.ok) throw new Error('Falha ao atualizar configurações no SQLite');
   return res.json();
 }
 
-export async function createPermuta(payload: { militarAId: string; dayA: number; militarBId: string; dayB: number; month: number; year: number }): Promise<{ success: boolean }> {
+export async function createPermuta(payload: { militarAId: string; dayA: number; militarBId: string; dayB: number; month: number; year: number; unitId?: string }): Promise<{ success: boolean }> {
   const res = await fetch(`${API_BASE}/permutas`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -120,3 +169,4 @@ export async function createPermuta(payload: { militarAId: string; dayA: number;
   if (!res.ok) throw new Error('Falha ao registrar permuta no SQLite');
   return res.json();
 }
+

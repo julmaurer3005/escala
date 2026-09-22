@@ -34,15 +34,108 @@ app.get('/api/health', async (req, res) => {
 });
 
 // ==========================================
+// UNITS ROUTES
+// ==========================================
+
+// GET all units
+app.get('/api/units', async (req, res) => {
+  try {
+    const result = await db.execute('SELECT * FROM units ORDER BY name ASC');
+    const units = result.rows.map(r => ({
+      id: String(r.id),
+      name: String(r.name),
+      code: String(r.code),
+      city: String(r.city),
+      createdAt: String(r.created_at || '')
+    }));
+    res.json(units);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST add new unit
+app.post('/api/units', async (req, res) => {
+  try {
+    const { id, name, code, city } = req.body;
+    if (!name || !code || !city) {
+      return res.status(400).json({ error: 'Nome, sigla e cidade são obrigatórios.' });
+    }
+
+    const newId = id || `unit_${Date.now()}`;
+    const createdAt = new Date().toISOString();
+
+    await db.execute({
+      sql: 'INSERT INTO units (id, name, code, city, created_at) VALUES (?, ?, ?, ?, ?)',
+      args: [newId, name.trim(), code.trim(), city.trim(), createdAt]
+    });
+
+    const newUnit = { id: newId, name: name.trim(), code: code.trim(), city: city.trim(), createdAt };
+    res.status(201).json({ success: true, unit: newUnit });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// PUT update unit
+app.put('/api/units/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { name, code, city } = req.body;
+
+    await db.execute({
+      sql: 'UPDATE units SET name = ?, code = ?, city = ? WHERE id = ?',
+      args: [name.trim(), code.trim(), city.trim(), id]
+    });
+
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// DELETE remove unit and its associated records
+app.delete('/api/units/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const countRes = await db.execute('SELECT COUNT(*) as count FROM units');
+    const totalUnits = Number(countRes.rows[0]?.count || 0);
+    if (totalUnits <= 1) {
+      return res.status(400).json({ error: 'Não é possível excluir a única unidade cadastrada.' });
+    }
+
+    const batch = [
+      { sql: 'DELETE FROM units WHERE id = ?', args: [id] },
+      { sql: 'DELETE FROM personnel WHERE unit_id = ?', args: [id] },
+      { sql: 'DELETE FROM schedules WHERE unit_id = ?', args: [id] },
+      { sql: 'DELETE FROM month_configs WHERE unit_id = ?', args: [id] },
+      { sql: 'DELETE FROM permutas WHERE unit_id = ?', args: [id] }
+    ];
+
+    await db.batch(batch);
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ==========================================
 // PERSONNEL ROUTES
 // ==========================================
 
-// GET all personnel ordered by seniority
+// GET all personnel for a unit ordered by seniority
 app.get('/api/personnel', async (req, res) => {
   try {
-    const result = await db.execute('SELECT * FROM personnel ORDER BY sort_order ASC');
+    const unitId = req.query.unitId ? String(req.query.unitId) : 'pelbm_ijui';
+    const result = await db.execute({
+      sql: 'SELECT * FROM personnel WHERE unit_id = ? ORDER BY sort_order ASC',
+      args: [unitId]
+    });
+
     const formatted = result.rows.map(r => ({
       id: String(r.id),
+      unitId: String(r.unit_id || unitId),
       rank: String(r.rank),
       warName: String(r.war_name),
       matricula: String(r.matricula || ''),
@@ -57,29 +150,33 @@ app.get('/api/personnel', async (req, res) => {
   }
 });
 
-// POST add new militar (with targetIndex)
+// POST add new militar (with targetIndex & unitId)
 app.post('/api/personnel', async (req, res) => {
   try {
-    const { id, rank, warName, matricula, role, isCommander, status, isActive, targetIndex } = req.body;
+    const { id, unitId = 'pelbm_ijui', rank, warName, matricula, role, isCommander, status, isActive, targetIndex } = req.body;
     const newId = id || String(Date.now());
 
-    const allRes = await db.execute('SELECT id, sort_order FROM personnel ORDER BY sort_order ASC');
+    const allRes = await db.execute({
+      sql: 'SELECT id, sort_order FROM personnel WHERE unit_id = ? ORDER BY sort_order ASC',
+      args: [unitId]
+    });
     const allPersonnel = allRes.rows;
     let insertIndex = typeof targetIndex === 'number' && targetIndex >= 0 ? targetIndex : allPersonnel.length;
 
     const batch = [];
     for (let i = insertIndex; i < allPersonnel.length; i++) {
       batch.push({
-        sql: 'UPDATE personnel SET sort_order = ? WHERE id = ?',
-        args: [i + 2, allPersonnel[i].id]
+        sql: 'UPDATE personnel SET sort_order = ? WHERE id = ? AND unit_id = ?',
+        args: [i + 2, allPersonnel[i].id, unitId]
       });
     }
 
     batch.push({
-      sql: `INSERT INTO personnel (id, rank, war_name, matricula, role, is_commander, status, is_active, sort_order)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      sql: `INSERT INTO personnel (id, unit_id, rank, war_name, matricula, role, is_commander, status, is_active, sort_order)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       args: [
         newId,
+        unitId,
         rank,
         warName.trim().toUpperCase(),
         matricula ? matricula.trim() : '',
@@ -102,7 +199,13 @@ app.post('/api/personnel', async (req, res) => {
 app.put('/api/personnel/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    const { rank, warName, matricula, role, isCommander, status, isActive, targetIndex } = req.body;
+    const { unitId, rank, warName, matricula, role, isCommander, status, isActive, targetIndex } = req.body;
+
+    const currentMilitarRes = await db.execute({
+      sql: 'SELECT unit_id FROM personnel WHERE id = ?',
+      args: [id]
+    });
+    const activeUnitId = unitId || currentMilitarRes.rows[0]?.unit_id || 'pelbm_ijui';
 
     const batch = [
       {
@@ -123,7 +226,10 @@ app.put('/api/personnel/:id', async (req, res) => {
     ];
 
     if (typeof targetIndex === 'number') {
-      const allRes = await db.execute('SELECT id FROM personnel ORDER BY sort_order ASC');
+      const allRes = await db.execute({
+        sql: 'SELECT id FROM personnel WHERE unit_id = ? ORDER BY sort_order ASC',
+        args: [activeUnitId]
+      });
       const all = allRes.rows.map(r => String(r.id));
       const currentIdx = all.findIndex(pId => pId === id);
       if (currentIdx !== -1 && currentIdx !== targetIndex) {
@@ -151,9 +257,15 @@ app.delete('/api/personnel/:id', async (req, res) => {
   try {
     const { id } = req.params;
 
-    const allRes = await db.execute({
-      sql: 'SELECT id FROM personnel WHERE id != ? ORDER BY sort_order ASC',
+    const militarRes = await db.execute({
+      sql: 'SELECT unit_id FROM personnel WHERE id = ?',
       args: [id]
+    });
+    const unitId = militarRes.rows[0]?.unit_id || 'pelbm_ijui';
+
+    const allRes = await db.execute({
+      sql: 'SELECT id FROM personnel WHERE id != ? AND unit_id = ? ORDER BY sort_order ASC',
+      args: [id, unitId]
     });
     const remaining = allRes.rows.map(r => String(r.id));
 
@@ -179,8 +291,11 @@ app.delete('/api/personnel/:id', async (req, res) => {
 // POST reorder personnel
 app.post('/api/personnel/reorder', async (req, res) => {
   try {
-    const { startIndex, endIndex } = req.body;
-    const allRes = await db.execute('SELECT id FROM personnel ORDER BY sort_order ASC');
+    const { startIndex, endIndex, unitId = 'pelbm_ijui' } = req.body;
+    const allRes = await db.execute({
+      sql: 'SELECT id FROM personnel WHERE unit_id = ? ORDER BY sort_order ASC',
+      args: [unitId]
+    });
     const all = allRes.rows.map(r => String(r.id));
 
     if (startIndex >= 0 && startIndex < all.length && endIndex >= 0 && endIndex < all.length) {
@@ -201,10 +316,14 @@ app.post('/api/personnel/reorder', async (req, res) => {
   }
 });
 
-// POST reset to default 21 firefighters
+// POST reset to default firefighters
 app.post('/api/personnel/reset', async (req, res) => {
   try {
-    await db.execute('DELETE FROM personnel');
+    const unitId = req.query.unitId ? String(req.query.unitId) : 'pelbm_ijui';
+    await db.execute({
+      sql: 'DELETE FROM personnel WHERE unit_id = ?',
+      args: [unitId]
+    });
     await initDatabase();
     res.json({ success: true });
   } catch (err) {
@@ -221,11 +340,12 @@ app.get('/api/schedule/:year/:month', async (req, res) => {
   try {
     const year = parseInt(req.params.year, 10);
     const month = parseInt(req.params.month, 10);
+    const unitId = req.query.unitId ? String(req.query.unitId) : 'pelbm_ijui';
     const numDays = new Date(year, month, 0).getDate();
 
     const configRes = await db.execute({
-      sql: 'SELECT * FROM month_configs WHERE year = ? AND month = ?',
-      args: [year, month]
+      sql: 'SELECT * FROM month_configs WHERE unit_id = ? AND year = ? AND month = ?',
+      args: [unitId, year, month]
     });
 
     let configRow = configRes.rows[0];
@@ -239,9 +359,10 @@ app.get('/api/schedule/:year/:month', async (req, res) => {
       }
 
       await db.execute({
-        sql: `INSERT INTO month_configs (year, month, base_hours, max_overtime_sgt, max_overtime_sd, max_weekends, daily_required_staff, last_month_day31_workers)
-              VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        sql: `INSERT OR REPLACE INTO month_configs (unit_id, year, month, base_hours, max_overtime_sgt, max_overtime_sd, max_weekends, daily_required_staff, last_month_day31_workers)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         args: [
+          unitId,
           year,
           month,
           baseHours,
@@ -254,6 +375,7 @@ app.get('/api/schedule/:year/:month', async (req, res) => {
       });
 
       configRow = {
+        unit_id: unitId,
         year,
         month,
         base_hours: baseHours,
@@ -266,6 +388,7 @@ app.get('/api/schedule/:year/:month', async (req, res) => {
     }
 
     const config = {
+      unitId: String(configRow.unit_id || unitId),
       year: Number(configRow.year),
       month: Number(configRow.month),
       numDays,
@@ -278,8 +401,8 @@ app.get('/api/schedule/:year/:month', async (req, res) => {
     };
 
     const schedRes = await db.execute({
-      sql: 'SELECT day, militar_id, shift_code FROM schedules WHERE year = ? AND month = ?',
-      args: [year, month]
+      sql: 'SELECT day, militar_id, shift_code FROM schedules WHERE unit_id = ? AND year = ? AND month = ?',
+      args: [unitId, year, month]
     });
 
     const schedule = {};
@@ -306,18 +429,18 @@ app.post('/api/schedule/:year/:month/cell', async (req, res) => {
   try {
     const year = parseInt(req.params.year, 10);
     const month = parseInt(req.params.month, 10);
-    const { day, militarId, code } = req.body;
+    const { day, militarId, code, unitId = 'pelbm_ijui' } = req.body;
 
     if (!code) {
       await db.execute({
-        sql: 'DELETE FROM schedules WHERE year = ? AND month = ? AND day = ? AND militar_id = ?',
-        args: [year, month, day, militarId]
+        sql: 'DELETE FROM schedules WHERE unit_id = ? AND year = ? AND month = ? AND day = ? AND militar_id = ?',
+        args: [unitId, year, month, day, militarId]
       });
     } else {
       await db.execute({
-        sql: `INSERT OR REPLACE INTO schedules (year, month, day, militar_id, shift_code)
-              VALUES (?, ?, ?, ?, ?)`,
-        args: [year, month, day, militarId, code]
+        sql: `INSERT OR REPLACE INTO schedules (unit_id, year, month, day, militar_id, shift_code)
+              VALUES (?, ?, ?, ?, ?, ?)`,
+        args: [unitId, year, month, day, militarId, code]
       });
     }
 
@@ -327,17 +450,17 @@ app.post('/api/schedule/:year/:month/cell', async (req, res) => {
   }
 });
 
-// POST bulk update schedule (e.g. after auto scheduler)
+// POST bulk update schedule (e.g. after auto scheduler or clear)
 app.post('/api/schedule/:year/:month/bulk', async (req, res) => {
   try {
     const year = parseInt(req.params.year, 10);
     const month = parseInt(req.params.month, 10);
-    const { schedule } = req.body;
+    const { schedule, unitId = 'pelbm_ijui' } = req.body;
 
     const batch = [
       {
-        sql: 'DELETE FROM schedules WHERE year = ? AND month = ?',
-        args: [year, month]
+        sql: 'DELETE FROM schedules WHERE unit_id = ? AND year = ? AND month = ?',
+        args: [unitId, year, month]
       }
     ];
 
@@ -346,9 +469,9 @@ app.post('/api/schedule/:year/:month/bulk', async (req, res) => {
       for (const [militarId, code] of Object.entries(militarMap)) {
         if (code) {
           batch.push({
-            sql: `INSERT INTO schedules (year, month, day, militar_id, shift_code)
-                  VALUES (?, ?, ?, ?, ?)`,
-            args: [year, month, day, militarId, code]
+            sql: `INSERT INTO schedules (unit_id, year, month, day, militar_id, shift_code)
+                  VALUES (?, ?, ?, ?, ?, ?)`,
+            args: [unitId, year, month, day, militarId, code]
           });
         }
       }
@@ -366,12 +489,13 @@ app.put('/api/config/:year/:month', async (req, res) => {
   try {
     const year = parseInt(req.params.year, 10);
     const month = parseInt(req.params.month, 10);
-    const { baseHours, maxOvertimeSgt, maxOvertimeSd, maxWeekends, dailyRequiredStaff, lastMonthDay31Workers } = req.body;
+    const { baseHours, maxOvertimeSgt, maxOvertimeSd, maxWeekends, dailyRequiredStaff, lastMonthDay31Workers, unitId = 'pelbm_ijui' } = req.body;
 
     await db.execute({
-      sql: `INSERT OR REPLACE INTO month_configs (year, month, base_hours, max_overtime_sgt, max_overtime_sd, max_weekends, daily_required_staff, last_month_day31_workers)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      sql: `INSERT OR REPLACE INTO month_configs (unit_id, year, month, base_hours, max_overtime_sgt, max_overtime_sd, max_weekends, daily_required_staff, last_month_day31_workers)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       args: [
+        unitId,
         year,
         month,
         baseHours,
@@ -392,42 +516,42 @@ app.put('/api/config/:year/:month', async (req, res) => {
 // POST create permuta
 app.post('/api/permutas', async (req, res) => {
   try {
-    const { militarAId, dayA, militarBId, dayB, month, year } = req.body;
+    const { militarAId, dayA, militarBId, dayB, month, year, unitId = 'pelbm_ijui' } = req.body;
     const permutaId = String(Date.now());
 
     const shiftARes = await db.execute({
-      sql: 'SELECT shift_code FROM schedules WHERE year = ? AND month = ? AND day = ? AND militar_id = ?',
-      args: [year, month, dayA, militarAId]
+      sql: 'SELECT shift_code FROM schedules WHERE unit_id = ? AND year = ? AND month = ? AND day = ? AND militar_id = ?',
+      args: [unitId, year, month, dayA, militarAId]
     });
     const shiftA = shiftARes.rows[0]?.shift_code ? String(shiftARes.rows[0].shift_code) : 'J';
 
     const shiftBRes = await db.execute({
-      sql: 'SELECT shift_code FROM schedules WHERE year = ? AND month = ? AND day = ? AND militar_id = ?',
-      args: [year, month, dayB, militarBId]
+      sql: 'SELECT shift_code FROM schedules WHERE unit_id = ? AND year = ? AND month = ? AND day = ? AND militar_id = ?',
+      args: [unitId, year, month, dayB, militarBId]
     });
     const shiftB = shiftBRes.rows[0]?.shift_code ? String(shiftBRes.rows[0].shift_code) : 'J';
 
     const batch = [
       {
-        sql: `INSERT INTO permutas (id, militar_a_id, day_a, militar_b_id, day_b, month, year, status, created_at)
-              VALUES (?, ?, ?, ?, ?, ?, ?, 'APROVADA', ?)`,
-        args: [permutaId, militarAId, dayA, militarBId, dayB, month, year, new Date().toISOString()]
+        sql: `INSERT INTO permutas (id, unit_id, militar_a_id, day_a, militar_b_id, day_b, month, year, status, created_at)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'APROVADA', ?)`,
+        args: [permutaId, unitId, militarAId, dayA, militarBId, dayB, month, year, new Date().toISOString()]
       },
       {
-        sql: 'DELETE FROM schedules WHERE year = ? AND month = ? AND day = ? AND militar_id = ?',
-        args: [year, month, dayA, militarAId]
+        sql: 'DELETE FROM schedules WHERE unit_id = ? AND year = ? AND month = ? AND day = ? AND militar_id = ?',
+        args: [unitId, year, month, dayA, militarAId]
       },
       {
-        sql: 'INSERT OR REPLACE INTO schedules (year, month, day, militar_id, shift_code) VALUES (?, ?, ?, ?, ?)',
-        args: [year, month, dayA, militarBId, shiftA]
+        sql: 'INSERT OR REPLACE INTO schedules (unit_id, year, month, day, militar_id, shift_code) VALUES (?, ?, ?, ?, ?, ?)',
+        args: [unitId, year, month, dayA, militarBId, shiftA]
       },
       {
-        sql: 'DELETE FROM schedules WHERE year = ? AND month = ? AND day = ? AND militar_id = ?',
-        args: [year, month, dayB, militarBId]
+        sql: 'DELETE FROM schedules WHERE unit_id = ? AND year = ? AND month = ? AND day = ? AND militar_id = ?',
+        args: [unitId, year, month, dayB, militarBId]
       },
       {
-        sql: 'INSERT OR REPLACE INTO schedules (year, month, day, militar_id, shift_code) VALUES (?, ?, ?, ?, ?)',
-        args: [year, month, dayB, militarAId, shiftB]
+        sql: 'INSERT OR REPLACE INTO schedules (unit_id, year, month, day, militar_id, shift_code) VALUES (?, ?, ?, ?, ?, ?)',
+        args: [unitId, year, month, dayB, militarAId, shiftB]
       }
     ];
 
@@ -446,3 +570,4 @@ if (process.env.NODE_ENV !== 'production' || process.env.RUN_STANDALONE === 'tru
 }
 
 export default app;
+

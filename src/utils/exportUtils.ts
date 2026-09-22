@@ -1,20 +1,28 @@
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import * as XLSX from 'xlsx';
-import type { Militar, MonthConfig } from '../types';
+import type { Militar, MonthConfig, Unit } from '../types';
 import { MONTH_NAMES, DAYS_OF_WEEK_SHORT, getShiftHours, parseShiftCell } from '../data/constants';
 import { computeScheduleStats } from './schedulerEngine';
 
 export function exportScheduleToPDF(
   personnel: Militar[],
   schedule: Record<number, Record<string, string>>,
-  config: MonthConfig
+  config: MonthConfig,
+  activeUnit?: Unit
 ) {
   const doc = new jsPDF({
     orientation: 'landscape',
     unit: 'mm',
     format: 'a4'
   });
+
+  const unit: Unit = activeUnit || {
+    id: 'pelbm_ijui',
+    name: '1º Pelotão de Bombeiro Militar',
+    code: '1º PelBM',
+    city: 'Ijuí/RS'
+  };
 
   const { year, month, numDays } = config;
   const monthName = MONTH_NAMES[month - 1].toUpperCase();
@@ -25,7 +33,7 @@ export function exportScheduleToPDF(
   doc.text('SECRETARIA DA SEGURANÇA PÚBLICA', 148.5, 13, { align: 'center' });
   doc.text('CORPO DE BOMBEIROS MILITAR DO RIO GRANDE DO SUL - CBMRS', 148.5, 17, { align: 'center' });
   doc.setFontSize(10.5);
-  doc.text(`ESCALA MENSAL DE SERVIÇO - 1º PELOTÃO DE BOMBEIRO MILITAR (IJUÍ/RS) - ${monthName} DE ${year}`, 148.5, 22, { align: 'center' });
+  doc.text(`ESCALA MENSAL DE SERVIÇO - ${unit.name.toUpperCase()} (${unit.city.toUpperCase()}) - ${monthName} DE ${year}`, 148.5, 22, { align: 'center' });
 
   const headRow1: string[] = ['POSTO/GRAD', 'ID FUNC.', 'NOME DE GUERRA'];
   const headRow2: string[] = ['', '', ''];
@@ -132,24 +140,44 @@ export function exportScheduleToPDF(
 
   const finalY = (doc as any).lastAutoTable.finalY + 12;
   if (finalY < 195) {
+    const sargenteante = personnel.find(p => (p.role || '').toLowerCase().includes('sargenteante'));
+    const comandante = personnel.find(p => p.isCommander || p.rank.includes('Tenente'));
+
+    const sargenteanteLabel = sargenteante 
+      ? `${sargenteante.rank} ${sargenteante.warName} - Sargenteante`
+      : `Sargenteante do ${unit.code}`;
+
+    const comandanteLabel = comandante 
+      ? `${comandante.rank} ${comandante.warName} - Comandante`
+      : `Comandante do ${unit.code}`;
+
     doc.setFontSize(8);
     doc.text('___________________________________________', 60, finalY, { align: 'center' });
-    doc.text('Sargenteante do 1º PelBM', 60, finalY + 4, { align: 'center' });
+    doc.text(sargenteanteLabel, 60, finalY + 4, { align: 'center' });
 
     doc.text('___________________________________________', 230, finalY, { align: 'center' });
-    doc.text('1º Tenente - Comandante do 1º PelBM', 230, finalY + 4, { align: 'center' });
+    doc.text(comandanteLabel, 230, finalY + 4, { align: 'center' });
   }
 
-  doc.save(`Escala_CBMRS_Ijui_${monthName}_${year}.pdf`);
+  const safeUnitCode = unit.code.replace(/[^a-zA-Z0-9]/g, '_');
+  doc.save(`Escala_CBMRS_${safeUnitCode}_${monthName}_${year}.pdf`);
 }
 
 export function exportScheduleToExcel(
   personnel: Militar[],
   schedule: Record<number, Record<string, string>>,
-  config: MonthConfig
+  config: MonthConfig,
+  activeUnit?: Unit
 ) {
   const { year, month, numDays } = config;
   const monthName = MONTH_NAMES[month - 1];
+
+  const unit: Unit = activeUnit || {
+    id: 'pelbm_ijui',
+    name: '1º Pelotão de Bombeiro Militar',
+    code: '1º PelBM',
+    city: 'Ijuí/RS'
+  };
 
   const headers: string[] = ['Posto/Graduação', 'ID Funcional', 'Nome de Guerra', 'Função Principal'];
   for (let d = 1; d <= numDays; d++) {
@@ -199,5 +227,7 @@ export function exportScheduleToExcel(
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, `Escala ${monthName}`);
 
-  XLSX.writeFile(wb, `Escala_CBMRS_Ijui_${monthName}_${year}.xlsx`);
+  const safeUnitCode = unit.code.replace(/[^a-zA-Z0-9]/g, '_');
+  XLSX.writeFile(wb, `Escala_CBMRS_${safeUnitCode}_${monthName}_${year}.xlsx`);
 }
+

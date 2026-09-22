@@ -1,3 +1,11 @@
+export interface Unit {
+  id: string;
+  name: string;
+  code: string;
+  city: string;
+  createdAt?: string;
+}
+
 export type RankType =
   | '1º Tenente'
   | '1º Sargento'
@@ -29,6 +37,7 @@ export type MilitarRole =
 
 export interface Militar {
   id: string;
+  unitId?: string;
   matricula?: string;
   rank: RankType;
   warName: string;
@@ -52,6 +61,7 @@ export interface ShiftDefinition {
 }
 
 export interface MonthConfig {
+  unitId?: string;
   year: number;
   month: number;
   numDays: number;
@@ -65,6 +75,7 @@ export interface MonthConfig {
 
 export interface PermutaRequest {
   id: string;
+  unitId?: string;
   militarAId: string;
   dayA: number;
   militarBId: string;
@@ -86,3 +97,4 @@ export interface ScheduleStats {
   sundays: number;
   distinctWeekends: number;
 }
+
