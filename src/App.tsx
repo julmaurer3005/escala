@@ -21,6 +21,7 @@ import { PersonnelManager } from './components/PersonnelManager';
 import { PermutaManager } from './components/PermutaManager';
 import { DashboardView } from './components/DashboardView';
 import { UnitManagerModal } from './components/UnitManagerModal';
+import { Analytics } from '@vercel/analytics/react';
 
 type TabType = 'ESCALA' | 'EFETIVO' | 'PERMUTAS' | 'DASHBOARD';
 
@@ -569,6 +570,7 @@ export function App() {
 
   return (
     <div className={`min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans ${darkMode ? '' : 'light'}`}>
+      <Analytics />
       
       <Header
         config={config}
